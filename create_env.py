@@ -36,8 +36,8 @@ def launch_instance(VPC_CON,INS_NAME,INS_USER_DATA,AMOUNT,INS_IMAGE=IMAGE,INS_TY
     created_instances=[]
     for number in range(AMOUNT):
         SERVER_NAME = INS_NAME + str(number+1).zfill(2)
-        USER_DATA_SERVERNAME = INS_USER_DATA.replace("PUT_HERE_THE_SERVER_NAME", SERVER_NAME)
-        USER_DATA_SERVERNAME = USER_DATA_SERVERNAME.replace("PUT_HERE_THE_PUPPET_MASTER_IP", PUPPET_MASTER_IP)
+        USER_DATA_SERVERNAME = INS_USER_DATA.replace("PUT_HERE_THE_SERVER_NAME", SERVER_NAME) #I'm not proud of this dirty trick I frequently use on my bash scripting, but it's handy. Sorry!
+        USER_DATA_SERVERNAME = USER_DATA_SERVERNAME.replace("PUT_HERE_THE_PUPPET_MASTER_IP", PUPPET_MASTER_IP) # Ditto
         print("Creating " + SERVER_NAME + " with user_data " + USER_DATA_SERVERNAME)
         reservation = VPC_CON.run_instances(image_id          =INS_IMAGE, 
                                             instance_type     =INS_TYPE, 
