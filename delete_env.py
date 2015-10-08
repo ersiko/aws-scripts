@@ -1,7 +1,5 @@
 #!/usr/bin/python3.4
 
-#from pprint import pprint
-from boto import ec2
 from boto import vpc
 import time
 
@@ -31,8 +29,11 @@ for subnet in subnets:
 
 route_tables = vpc_con.get_all_route_tables(filters=({"tag:Project": PROJECT}))
 for route_table in route_tables:
-	print(route_table)
-	vpc_con.delete_route_table(route_table.id)
+    print(route_table)
+    try:
+        vpc_con.delete_route_table(route_table.id)
+    except Exception:
+        print("Can't delete this route table. Probably it's main.")	
 
 security_groups = vpc_con.get_all_security_groups(filters=({"tag:Project": PROJECT}))
 for security_group in security_groups:
