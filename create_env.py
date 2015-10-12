@@ -16,7 +16,7 @@ ZONE            = 'ap-southeast-1a' # Availability zone
 SECURITY_GROUPS = ['Hadoop']
 PROJECT         = 'Hadoop1'
 
-PUPPET_NAME            = "MasterOfPuppets"
+PUPPET_NAME            = "puppetmaster"
 PUPPET_USER_DATA       = """#!/bin/bash
 cat > /usr/local/sbin/configure-pat.sh << EOF
 #!/bin/bash
@@ -69,15 +69,16 @@ sed -ie 's/^exit 0/# Configure PAT\\n\/usr\/local\/sbin\/configure-pat.sh\\nexit
 echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
-apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppetmaster && reboot
+apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppetmaster && sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && reboot
 """
+
 
 HADOOP_NAME            = "Hadoop-node"
 HADOOP_USER_DATA       = """#!/bin/bash
 echo PUT_HERE_THE_SERVER_NAME  > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
-while :;do apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppet && reboot;done
+while :;do apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppet && sed -ie 's/\[main\]/\[main\]\\nserver=puppetmaster/g' /etc/puppet/puppet.conf && reboot;done
 """
 
 def launch_instance(VPC_CON,INS_NAME,INS_USER_DATA,AMOUNT,INS_IMAGE=IMAGE,INS_TYPE=INSTANCE_TYPE,INS_KEY_NAME=KEY_NAME,INS_SECGROUPS=[],INS_SUBNET="",INS_PROJECT=PROJECT,PUPPET_MASTER_IP='127.0.0.1'):
@@ -153,13 +154,13 @@ default_route_table[0].add_tag("Project",PROJECT)
 natroute = vpc_con.create_route(default_route_table[0].id, '0.0.0.0/0', instance_id=puppetmaster[0].id)
 
 print("Creating hadoop node instance(s) in VPC")
-hadoop=launch_instance(AMOUNT=3,VPC_CON=vpc_con,INS_NAME=HADOOP_NAME,INS_USER_DATA=HADOOP_USER_DATA,INS_SECGROUPS=[secgroup.id],INS_SUBNET=subnetbe.id,PUPPET_MASTER_IP=puppetmaster[0].private_ip_address)
+hadoop=launch_instance(AMOUNT=1,VPC_CON=vpc_con,INS_NAME=HADOOP_NAME,INS_USER_DATA=HADOOP_USER_DATA,INS_SECGROUPS=[secgroup.id],INS_SUBNET=subnetbe.id,PUPPET_MASTER_IP=puppetmaster[0].private_ip_address)
 
 print("Creating elasticip")
 elasticip = vpc_con.allocate_address(domain='vpc')
 print("Associating elasticip to puppetmaster instance")
 vpc_con.associate_address(instance_id=puppetmaster[0].id, allocation_id=elasticip.allocation_id)
 
-print("ssh ubuntu@" + elasticip.public_ip + " -i my-ec2-key.pem -L 2222:" + hadoop[0].private_ip_address + ":22")
-print("ssh-keygen -f ~/.ssh/known_hosts -R [localhost]:2222;ssh ubuntu@localhost -p 2222 -i my-ec2-key.pem")
+print("ssh ubuntu@" + elasticip.public_ip + " -o \"StrictHostKeyChecking no\" -i my-ec2-key.pem -L 2222:" + hadoop[0].private_ip_address + ":22")
+print("ssh-keygen -f ~/.ssh/known_hosts -R [localhost]:2222;ssh -o \"StrictHostKeyChecking no\" ubuntu@localhost -p 2222 -i my-ec2-key.pem")
 
