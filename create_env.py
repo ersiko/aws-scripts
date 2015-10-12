@@ -12,7 +12,7 @@ REGION          = 'ap-southeast-1'
 IMAGE           = ubuntu # Basic 64-bit Ubuntu AMI
 KEY_NAME        = 'my-ec2-key'
 INSTANCE_TYPE   = 't2.micro'
-ZONE            = 'ap-southeast-1a' # Availability zone
+#ZONE            = 'ap-southeast-1a' # Availability zone
 SECURITY_GROUPS = ['Hadoop']
 PROJECT         = 'Hadoop1'
 
@@ -62,23 +62,99 @@ iptables -n -t nat -L POSTROUTING | log
 log "Configuration of PAT complete."
 exit 0
 EOF
+
 chmod u+x /usr/local/sbin/configure-pat.sh
-sed -ie 's/^exit 0/# Configure PAT\\n\/usr\/local\/sbin\/configure-pat.sh\\nexit 0/g' /etc/rc.local
+sed -ie 's/^exit 0/apt-get update\\n# Configure PAT\\n\/usr\/local\/sbin\/configure-pat.sh\\nexit 0/g' /etc/rc.local
 /etc/rc.local
+
+cat > /tmp/hiera.yaml << EOF
+---
+:backends:
+  - json
+:json:
+  :datadir: /etc/puppet/data
+:hierarchy:
+  - "hosts/%{fqdn}"
+  - "role/%{role}"
+  - common
+EOF
+
+cat > /tmp/hadoop-node.json << EOF
+{
+    "java::distribution": "jdk",
+    "classes": [ "java" ]
+}
+EOF
+
+cat > /tmp/common.json << EOF
+{
+    "classes": [ "facts" ]
+}
+EOF
+
+
+cat > /tmp/facts.rb << EOF
+Facter.add('role') do
+  setcode do
+    hostname = Facter.value('hostname')
+    match = hostname.match /^(\D+)/
+    role = match.captures[0]
+    role
+  end
+end
+EOF
+
+cat > /tmp/init.pp << EOF
+class facts() {
+  file { '/etc/facts':
+    content => template('facts/factlist.erb')
+  }
+}
+EOF
+
+cat > /tmp/factlist.erb << EOF
+# Facts
+role=<%=@role%>
+EOF
 
 echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
-apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppetmaster && sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && puppet module install ersiko-mapr4 && reboot
+#apt-get dist-upgrade -y && \\
+apt-get install -y joe puppet git puppetmaster && \\
+mv /tmp/hiera.yaml /etc/puppet/hiera.yaml && \\
+ln -s /etc/puppet/hiera.yaml /etc/hiera.yaml && \\
+sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && \\
+puppet module install ersiko-mapr4 && \\
+puppet module install puppetlabs-java && \\
+mkdir -p /etc/puppet/data/role && \\
+mv /tmp/hadoop-node.json /etc/puppet/data/role && \\
+mv /tmp/common.json /etc/puppet/data/ && \\
+mkdir -p /etc/puppet/modules/facts/lib/facter && \\
+mv /tmp/facts.rb /etc/puppet/modules/facts/lib/facter && \\
+mkdir /etc/puppet/modules/facts/manifests  && \\
+mv /tmp/init.pp /etc/puppet/modules/facts/manifests  && \\
+mkdir /etc/puppet/modules/facts/templates && \\
+mv /tmp/factlist.erb /etc/puppet/modules/facts/templates && \\
+chown puppet /etc/puppet/data && \\
+echo "hiera_include('classes')" >> /etc/puppet/manifests/site.pp && \\
+reboot
 """
 
 
-HADOOP_NAME            = "Hadoop-node"
+HADOOP_NAME            = "hadoop-node"
 HADOOP_USER_DATA       = """#!/bin/bash
+sed -ie 's/^exit 0/apt-get update\\nexit 0/g' /etc/rc.local
+/etc/rc.local
 echo PUT_HERE_THE_SERVER_NAME  > /etc/hostname
-echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
+echo PUT_HERE_THE_PUPPET_MASTER_IP PUT_HERE_THE_PUPPET_MASTER_NAME >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
-while :;do apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppet && sed -ie 's/\[main\]/\[main\]\\nserver=puppetmaster/g' /etc/puppet/puppet.conf && reboot;done
+while [ ! -e /etc/puppet/puppet.conf ];do apt-get update && \\
+#apt-get dist-upgrade -y && \\
+apt-get install -y joe puppet git puppet;done 
+sed -ie 's/\[main\]/\[main\]\\nserver=PUT_HERE_THE_PUPPET_MASTER_NAME\\nruninterval=30/g' /etc/puppet/puppet.conf && \\
+puppet agent --enable && \\
+reboot
 """
 
 def launch_instance(VPC_CON,INS_NAME,INS_USER_DATA,AMOUNT,INS_IMAGE=IMAGE,INS_TYPE=INSTANCE_TYPE,INS_KEY_NAME=KEY_NAME,INS_SECGROUPS=[],INS_SUBNET="",INS_PROJECT=PROJECT,PUPPET_MASTER_IP='127.0.0.1'):
@@ -87,6 +163,7 @@ def launch_instance(VPC_CON,INS_NAME,INS_USER_DATA,AMOUNT,INS_IMAGE=IMAGE,INS_TY
         SERVER_NAME = INS_NAME + str(number+1).zfill(2)
         USER_DATA_SERVERNAME = INS_USER_DATA.replace("PUT_HERE_THE_SERVER_NAME", SERVER_NAME) #I'm not proud of this dirty trick I frequently use on my bash scripting, but it's handy. Sorry!
         USER_DATA_SERVERNAME = USER_DATA_SERVERNAME.replace("PUT_HERE_THE_PUPPET_MASTER_IP", PUPPET_MASTER_IP) # Ditto
+        USER_DATA_SERVERNAME = USER_DATA_SERVERNAME.replace("PUT_HERE_THE_PUPPET_MASTER_NAME", PUPPET_NAME + '01.' + REGION + '.compute.internal') # Ditto
         print("Creating " + SERVER_NAME + " with user_data " + USER_DATA_SERVERNAME)
         reservation = VPC_CON.run_instances(image_id          =INS_IMAGE, 
                                             instance_type     =INS_TYPE, 
