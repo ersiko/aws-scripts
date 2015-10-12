@@ -69,7 +69,7 @@ sed -ie 's/^exit 0/# Configure PAT\\n\/usr\/local\/sbin\/configure-pat.sh\\nexit
 echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
-apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppetmaster && sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && reboot
+apt-get update && apt-get dist-upgrade -y && apt-get install -y puppet git puppetmaster && sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && puppet module install ersiko-mapr4 && reboot
 """
 
 
