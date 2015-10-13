@@ -8,6 +8,9 @@ ubuntu='ami-96f1c1c4'
 redhat='ami-dc1c2b8e'
 nat   ='ami-1a9dac48'
 
+PUPPET_INSTANCE = 't2.micro'
+HADOOP_INSTANCE = 't2.large' # Mapr needs 4GB, and the OS needs some, so t2.medium isn't enough
+
 REGION          = 'ap-southeast-1'
 IMAGE           = ubuntu # Basic 64-bit Ubuntu AMI
 KEY_NAME        = 'my-ec2-key'
@@ -83,14 +86,15 @@ EOF
 
 cat > /tmp/hadoop-node.json << EOF
 {
-    "classes": [ "mapr4", "java" ],
+    "classes": [ "mapr4::zookeeper", "java" ],
     "java::distribution": "jdk",
     "mapr4::mapr_subnets" : "PUT_HERE_THE_BE_SUBNET",
     "mapr4::mapr_cldb": "127.0.0.1",
     "mapr4::mapr_zookeeper": "127.0.0.1",
     "mapr4::mapr_gid": "5000",
     "mapr4::mapr_uid": "5000",
-    "mapr4::mapr_pass": "mapr"
+    "mapr4::mapr_pass": "mapr",
+    "mapr4::core::disks": "disks-pythian.txt"
 }
 EOF
 
@@ -101,7 +105,7 @@ cat > /tmp/common.json << EOF
 EOF
 
 echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
-echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
+echo PUT_HERE_THE_PUPPET_MASTER_IP PUT_HERE_THE_PUPPET_MASTER_NAME >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
 #apt-get dist-upgrade -y && \\
 apt-get install -y joe puppet git puppetmaster whois && \\
@@ -140,6 +144,7 @@ apt-get install -y joe puppet git puppet;done
 sed -ie 's/\[main\]/\[main\]\\nserver=PUT_HERE_THE_PUPPET_MASTER_NAME\\nruninterval=30/g' /etc/puppet/puppet.conf && \\
 sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
 sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
+sed -ie 's/^127.0.0.1 localhost/127.0.0.1 localhost PUT_HERE_THE_SERVER_NAME/g' /etc/hosts && \\
 reboot
 """
 
@@ -174,15 +179,15 @@ my_vpc  = vpc_con.create_vpc('10.0.0.0/16')
 vpc_con.modify_vpc_attribute(my_vpc.id, enable_dns_support=True)
 vpc_con.modify_vpc_attribute(my_vpc.id, enable_dns_hostnames=True)
 print("Tagging VPC")
-my_vpc.add_tag("Name","Hadoop1-VPC")
+my_vpc.add_tag("Name",PROJECT+"-VPC")
 my_vpc.add_tag("Project",PROJECT)
 print("Creating subnets")
 subnetdmz  = vpc_con.create_subnet(my_vpc.id,'10.0.1.0/24')
 subnetbe   = vpc_con.create_subnet(my_vpc.id,'10.0.2.0/24')
 print("Tagging subnet")
-subnetdmz.add_tag("Name","Hadoop1-Subnet")
+subnetdmz.add_tag("Name",PROJECT+"-Subnet")
 subnetdmz.add_tag("Project",PROJECT)
-subnetbe.add_tag("Name","Hadoop1-Subnet")
+subnetbe.add_tag("Name",PROJECT+"-Subnet")
 subnetbe.add_tag("Project",PROJECT)
 print("Creating internet gateway")
 gateway = vpc_con.create_internet_gateway()
@@ -197,7 +202,7 @@ vpc_con.associate_route_table(route_table.id, subnetdmz.id)
 print("Create route to the internet")
 route = vpc_con.create_route(route_table.id, '0.0.0.0/0', gateway.id)
 print("Creating Security group")
-secgroup = vpc_con.create_security_group('Hadoop1_group','A security_group for Hadoop', my_vpc.id)
+secgroup = vpc_con.create_security_group(PROJECT+'_group','A security_group for Hadoop', my_vpc.id)
 print("Opening port 22 and other stuff in the secgroup ")
 secgroup.authorize(ip_protocol='tcp', from_port=22, to_port=22, cidr_ip='0.0.0.0/0')
 secgroup.authorize(ip_protocol='tcp', from_port=0, to_port=65535, cidr_ip='10.0.0.0/16')
@@ -218,8 +223,25 @@ default_route_table[0].add_tag("Project",PROJECT)
 natroute = vpc_con.create_route(default_route_table[0].id, '0.0.0.0/0', instance_id=puppetmaster[0].id)
 
 print("Creating hadoop node instance(s) in VPC")
-hadoop=launch_instance(AMOUNT=1,VPC_CON=vpc_con,INS_NAME=HADOOP_NAME,INS_USER_DATA=HADOOP_USER_DATA,INS_SECGROUPS=[secgroup.id],INS_SUBNET=subnetbe,PUPPET_MASTER_IP=puppetmaster[0].private_ip_address)
+hadoop=launch_instance(AMOUNT=1,
+                       VPC_CON=vpc_con,
+                       INS_NAME=HADOOP_NAME,
+                       INS_USER_DATA=HADOOP_USER_DATA,
+                       INS_SECGROUPS=[secgroup.id],
+                       INS_SUBNET=subnetbe,
+                       INS_TYPE=HADOOP_INSTANCE,
+                       PUPPET_MASTER_IP=puppetmaster[0].private_ip_address)
 
+print("Creating volume for hadoop node")
+my_vol=vpc_con.create_volume(10,hadoop[0].placement,volume_type='standard')
+my_vol.add_tag("Project",PROJECT
+    )
+while hadoop[0].update() != "running":
+    time.sleep(5)
+    print ("Waiting for hadoop node to start")
+
+print("Attaching volume to hadoop node")
+my_vol.attach(hadoop[0].id,'xvdf')
 print("Creating elasticip")
 elasticip = vpc_con.allocate_address(domain='vpc')
 print("Associating elasticip to puppetmaster instance")
