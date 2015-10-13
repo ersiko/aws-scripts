@@ -83,8 +83,14 @@ EOF
 
 cat > /tmp/hadoop-node.json << EOF
 {
+    "classes": [ "mapr4", "java" ],
     "java::distribution": "jdk",
-    "classes": [ "java" ]
+    "mapr4::mapr_subnets" : "PUT_HERE_THE_BE_SUBNET",
+    "mapr4::mapr_cldb": "127.0.0.1",
+    "mapr4::mapr_zookeeper": "127.0.0.1",
+    "mapr4::mapr_gid": "5000",
+    "mapr4::mapr_uid": "5000",
+    "mapr4::mapr_pass": "mapr"
 }
 EOF
 
@@ -98,14 +104,16 @@ echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
 #apt-get dist-upgrade -y && \\
-apt-get install -y joe puppet git puppetmaster && \\
+apt-get install -y joe puppet git puppetmaster whois && \\
 mv /tmp/hiera.yaml /etc/puppet/hiera.yaml && \\
 rm /etc/hiera.yaml && \\
 ln -s /etc/puppet/hiera.yaml /etc/hiera.yaml && \\
 sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && \\
 sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
 sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
-puppet module install ersiko-mapr4 && \\
+#puppet module install ersiko-mapr4 && \\
+git clone https://github.com/ersiko/mapr4-puppet-module.git && \\
+mv mapr4-puppet-module /etc/puppet/modules/mapr4 && \\
 puppet module install ersiko-facts && \\
 puppet module install puppetlabs-java && \\
 mkdir -p /etc/puppet/data/role && \\
@@ -132,7 +140,6 @@ apt-get install -y joe puppet git puppet;done
 sed -ie 's/\[main\]/\[main\]\\nserver=PUT_HERE_THE_PUPPET_MASTER_NAME\\nruninterval=30/g' /etc/puppet/puppet.conf && \\
 sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
 sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
-puppet agent --enable && \\
 reboot
 """
 
@@ -143,13 +150,14 @@ def launch_instance(VPC_CON,INS_NAME,INS_USER_DATA,AMOUNT,INS_IMAGE=IMAGE,INS_TY
         USER_DATA_SERVERNAME = INS_USER_DATA.replace("PUT_HERE_THE_SERVER_NAME", SERVER_NAME) #I'm not proud of this dirty trick I frequently use on my bash scripting, but it's handy. Sorry!
         USER_DATA_SERVERNAME = USER_DATA_SERVERNAME.replace("PUT_HERE_THE_PUPPET_MASTER_IP", PUPPET_MASTER_IP) # Ditto
         USER_DATA_SERVERNAME = USER_DATA_SERVERNAME.replace("PUT_HERE_THE_PUPPET_MASTER_NAME", PUPPET_NAME + '01.' + REGION + '.compute.internal') # Ditto
+        USER_DATA_SERVERNAME = USER_DATA_SERVERNAME.replace("PUT_HERE_THE_BE_SUBNET", subnetbe.cidr_block)
         print("Creating " + SERVER_NAME + " with user_data " + USER_DATA_SERVERNAME)
         reservation = VPC_CON.run_instances(image_id          =INS_IMAGE, 
                                             instance_type     =INS_TYPE, 
                                             key_name          =INS_KEY_NAME, 
                                             security_group_ids=INS_SECGROUPS, 
                                             user_data         =USER_DATA_SERVERNAME,
-                                            subnet_id         =INS_SUBNET)
+                                            subnet_id         =INS_SUBNET.id)
         time.sleep(3)
         instance=reservation.instances[0]
         instance.add_tag("Project", INS_PROJECT)
@@ -197,7 +205,7 @@ secgroup.authorize(ip_protocol='icmp', from_port=-1, to_port=-1, cidr_ip='10.0.0
 secgroup.add_tag("Project",PROJECT)
 
 print("Creating puppetmaster instance in VPC")
-puppetmaster=launch_instance(AMOUNT=1,VPC_CON=vpc_con,INS_NAME=PUPPET_NAME,INS_USER_DATA=PUPPET_USER_DATA,INS_SECGROUPS=[secgroup.id],INS_SUBNET=subnetdmz.id)
+puppetmaster=launch_instance(AMOUNT=1,VPC_CON=vpc_con,INS_NAME=PUPPET_NAME,INS_USER_DATA=PUPPET_USER_DATA,INS_SECGROUPS=[secgroup.id],INS_SUBNET=subnetdmz)
 
 while puppetmaster[0].update() != "running":
     time.sleep(5)
@@ -210,7 +218,7 @@ default_route_table[0].add_tag("Project",PROJECT)
 natroute = vpc_con.create_route(default_route_table[0].id, '0.0.0.0/0', instance_id=puppetmaster[0].id)
 
 print("Creating hadoop node instance(s) in VPC")
-hadoop=launch_instance(AMOUNT=1,VPC_CON=vpc_con,INS_NAME=HADOOP_NAME,INS_USER_DATA=HADOOP_USER_DATA,INS_SECGROUPS=[secgroup.id],INS_SUBNET=subnetbe.id,PUPPET_MASTER_IP=puppetmaster[0].private_ip_address)
+hadoop=launch_instance(AMOUNT=1,VPC_CON=vpc_con,INS_NAME=HADOOP_NAME,INS_USER_DATA=HADOOP_USER_DATA,INS_SECGROUPS=[secgroup.id],INS_SUBNET=subnetbe,PUPPET_MASTER_IP=puppetmaster[0].private_ip_address)
 
 print("Creating elasticip")
 elasticip = vpc_con.allocate_address(domain='vpc')
