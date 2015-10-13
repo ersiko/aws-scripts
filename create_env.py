@@ -94,31 +94,6 @@ cat > /tmp/common.json << EOF
 }
 EOF
 
-
-cat > /tmp/facts.rb << EOF
-Facter.add('role') do
-  setcode do
-    hostname = Facter.value('hostname')
-    match = hostname.match /^(\D+)/
-    role = match.captures[0]
-    role
-  end
-end
-EOF
-
-cat > /tmp/init.pp << EOF
-class facts() {
-  file { '/etc/facts':
-    content => template('facts/factlist.erb')
-  }
-}
-EOF
-
-cat > /tmp/factlist.erb << EOF
-# Facts
-role=<%=@role%>
-EOF
-
 echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP puppetmaster >> /etc/hosts
 export DEBIAN_FRONTEND=noninteractive
@@ -131,16 +106,11 @@ sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf &&
 sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
 sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
 puppet module install ersiko-mapr4 && \\
+puppet module install ersiko-facts && \\
 puppet module install puppetlabs-java && \\
 mkdir -p /etc/puppet/data/role && \\
 mv /tmp/hadoop-node.json /etc/puppet/data/role && \\
 mv /tmp/common.json /etc/puppet/data/ && \\
-mkdir -p /etc/puppet/modules/facts/lib/facter && \\
-mv /tmp/facts.rb /etc/puppet/modules/facts/lib/facter && \\
-mkdir /etc/puppet/modules/facts/manifests  && \\
-mv /tmp/init.pp /etc/puppet/modules/facts/manifests  && \\
-mkdir /etc/puppet/modules/facts/templates && \\
-mv /tmp/factlist.erb /etc/puppet/modules/facts/templates && \\
 chown puppet /etc/puppet/data && \\
 echo "hiera_include('classes')" >> /etc/puppet/manifests/site.pp && \\
 reboot
@@ -247,6 +217,6 @@ elasticip = vpc_con.allocate_address(domain='vpc')
 print("Associating elasticip to puppetmaster instance")
 vpc_con.associate_address(instance_id=puppetmaster[0].id, allocation_id=elasticip.allocation_id)
 
-print("ssh ubuntu@" + elasticip.public_ip + " -o \"StrictHostKeyChecking no\" -i my-ec2-key.pem -L 2222:" + hadoop[0].private_ip_address + ":22")
+print("ssh ubuntu@" + elasticip.public_ip + " -o \"StrictHostKeyChecking no\" -i my-ec2-key.pem -L 2222:" + hadoop[0].private_ip_address + ":22;ssh-keygen -f ~/.ssh/known_hosts -R "+ elasticip.public_ip)
 print("ssh-keygen -f ~/.ssh/known_hosts -R [localhost]:2222;ssh -o \"StrictHostKeyChecking no\" ubuntu@localhost -p 2222 -i my-ec2-key.pem")
 
