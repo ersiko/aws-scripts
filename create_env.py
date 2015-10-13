@@ -62,6 +62,8 @@ iptables -n -t nat -L POSTROUTING | log
 log "Configuration of PAT complete."
 exit 0
 EOF
+wget https://apt.puppetlabs.com/puppetlabs-release-trusty.deb -O /tmp/puppetlabs-release-trusty.deb 
+dpkg -i /tmp/puppetlabs-release-trusty.deb
 
 chmod u+x /usr/local/sbin/configure-pat.sh
 sed -ie 's/^exit 0/apt-get update\\n# Configure PAT\\n\/usr\/local\/sbin\/configure-pat.sh\\nexit 0/g' /etc/rc.local
@@ -123,8 +125,11 @@ export DEBIAN_FRONTEND=noninteractive
 #apt-get dist-upgrade -y && \\
 apt-get install -y joe puppet git puppetmaster && \\
 mv /tmp/hiera.yaml /etc/puppet/hiera.yaml && \\
+rm /etc/hiera.yaml && \\
 ln -s /etc/puppet/hiera.yaml /etc/hiera.yaml && \\
 sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && \\
+sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
+sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
 puppet module install ersiko-mapr4 && \\
 puppet module install puppetlabs-java && \\
 mkdir -p /etc/puppet/data/role && \\
@@ -144,6 +149,8 @@ reboot
 
 HADOOP_NAME            = "hadoop-node"
 HADOOP_USER_DATA       = """#!/bin/bash
+wget https://apt.puppetlabs.com/puppetlabs-release-trusty.deb -O /tmp/puppetlabs-release-trusty.deb 
+dpkg -i /tmp/puppetlabs-release-trusty.deb
 sed -ie 's/^exit 0/apt-get update\\nexit 0/g' /etc/rc.local
 /etc/rc.local
 echo PUT_HERE_THE_SERVER_NAME  > /etc/hostname
@@ -153,6 +160,8 @@ while [ ! -e /etc/puppet/puppet.conf ];do apt-get update && \\
 #apt-get dist-upgrade -y && \\
 apt-get install -y joe puppet git puppet;done 
 sed -ie 's/\[main\]/\[main\]\\nserver=PUT_HERE_THE_PUPPET_MASTER_NAME\\nruninterval=30/g' /etc/puppet/puppet.conf && \\
+sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
+sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
 puppet agent --enable && \\
 reboot
 """
