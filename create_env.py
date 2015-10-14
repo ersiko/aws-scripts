@@ -250,3 +250,4 @@ vpc_con.associate_address(instance_id=puppetmaster[0].id, allocation_id=elastici
 print("ssh ubuntu@" + elasticip.public_ip + " -o \"StrictHostKeyChecking no\" -i my-ec2-key.pem -L 2222:" + hadoop[0].private_ip_address + ":22;ssh-keygen -f ~/.ssh/known_hosts -R "+ elasticip.public_ip)
 print("ssh-keygen -f ~/.ssh/known_hosts -R [localhost]:2222;ssh -o \"StrictHostKeyChecking no\" ubuntu@localhost -p 2222 -i my-ec2-key.pem")
 
+
