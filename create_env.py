@@ -86,7 +86,7 @@ EOF
 
 cat > /tmp/hadoop-node.json << EOF
 {
-    "classes": [ "mapr4::zookeeper", "java" ],
+    "classes": [ "mapr4::zookeeper", "mapr4::cldb", "mapr4::webserver", "mapr4::jobtracker", "mapr4::resourcemanager", "mapr4::nodemanager", "java" ],
     "java::distribution": "jdk",
     "mapr4::mapr_subnets" : "PUT_HERE_THE_BE_SUBNET",
     "mapr4::mapr_cldb": "127.0.0.1",
@@ -103,6 +103,30 @@ cat > /tmp/common.json << EOF
     "classes": [ "facts" ]
 }
 EOF
+
+cat > /tmp/integers
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+EOF
+
+cat > /tmp/hive-load.sh
+hadoop fs -put /tmp/integers /
+hive -e "create table test_table;load data inpath '/integers' into table test_table;"
+EOF
+chmod a+x /tmp/hive-load.sh
+
+cat > /tmp/hive-test.sh
+hive -e "select * from test_table;select count(*) from test_table;"
+EOF
+chmod a+x /tmp/hive-test.sh
 
 echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP PUT_HERE_THE_PUPPET_MASTER_NAME >> /etc/hosts
@@ -247,7 +271,7 @@ elasticip = vpc_con.allocate_address(domain='vpc')
 print("Associating elasticip to puppetmaster instance")
 vpc_con.associate_address(instance_id=puppetmaster[0].id, allocation_id=elasticip.allocation_id)
 
-print("ssh ubuntu@" + elasticip.public_ip + " -o \"StrictHostKeyChecking no\" -i my-ec2-key.pem -L 2222:" + hadoop[0].private_ip_address + ":22;ssh-keygen -f ~/.ssh/known_hosts -R "+ elasticip.public_ip)
+print("ssh ubuntu@" + elasticip.public_ip + " -o \"StrictHostKeyChecking no\" -i my-ec2-key.pem -L 2222:" + hadoop[0].private_ip_address + ":22 -L 8443:" + hadoop[0].private_ip_address + ":8443;ssh-keygen -f ~/.ssh/known_hosts -R "+ elasticip.public_ip)
 print("ssh-keygen -f ~/.ssh/known_hosts -R [localhost]:2222;ssh -o \"StrictHostKeyChecking no\" ubuntu@localhost -p 2222 -i my-ec2-key.pem")
 
 

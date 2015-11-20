@@ -23,6 +23,12 @@ while len(vpc_con.get_only_instances(filters=({"tag:Project": PROJECT, "instance
 	time.sleep(5)
 	print ("Waiting for instances to stop")
 
+print("Removing all volumes")
+volumes = vpc_con.get_all_volumes(filters=({"tag:Project": PROJECT}))
+for volume in volumes:
+    print(volume)
+    vpc_con.delete_volume(volume.id)
+
 print("Deleting all subnets")
 subnets = vpc_con.get_all_subnets(filters=({"tag:Project": PROJECT}))
 for subnet in subnets:
@@ -52,7 +58,6 @@ for security_group in security_groups:
 print("Finally detaching and deleting internet gateway, then deleting VPC")
 my_vpcs = vpc_con.get_all_vpcs(filters=({"tag:Project": PROJECT}))
 internet_gateways = vpc_con.get_all_internet_gateways(filters=({"tag:Project": PROJECT}))
-security_groups = vpc_con.get_all_security_groups(filters=({"tag:Project": PROJECT}))
 
 for my_vpc in my_vpcs:
     for internet_gateway in internet_gateways:
