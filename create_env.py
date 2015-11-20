@@ -86,7 +86,7 @@ EOF
 
 cat > /tmp/hadoop-node.json << EOF
 {
-    "classes": [ "mapr4::zookeeper", "mapr4::cldb", "mapr4::webserver", "mapr4::jobtracker", "mapr4::resourcemanager", "mapr4::nodemanager", "java" ],
+    "classes": [ "mapr4::zookeeper", "mapr4::cldb", "mapr4::webserver", "mapr4::jobtracker", "mapr4::resourcemanager", "mapr4::nodemanager", "mapr4::historyserver", "mapr4::gateway", "java" ],
     "java::distribution": "jdk",
     "mapr4::mapr_subnets" : "PUT_HERE_THE_BE_SUBNET",
     "mapr4::mapr_cldb": "127.0.0.1",
@@ -104,29 +104,6 @@ cat > /tmp/common.json << EOF
 }
 EOF
 
-cat > /tmp/integers
-0
-1
-2
-3
-4
-5
-6
-7
-8
-9
-EOF
-
-cat > /tmp/hive-load.sh
-hadoop fs -put /tmp/integers /
-hive -e "create table test_table;load data inpath '/integers' into table test_table;"
-EOF
-chmod a+x /tmp/hive-load.sh
-
-cat > /tmp/hive-test.sh
-hive -e "select * from test_table;select count(*) from test_table;"
-EOF
-chmod a+x /tmp/hive-test.sh
 
 echo PUT_HERE_THE_SERVER_NAME > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP PUT_HERE_THE_PUPPET_MASTER_NAME >> /etc/hosts
@@ -169,6 +146,30 @@ sed -ie 's/\[main\]/\[main\]\\nserver=PUT_HERE_THE_PUPPET_MASTER_NAME\\nruninter
 sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
 sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
 sed -ie 's/^127.0.0.1 localhost/127.0.0.1 localhost PUT_HERE_THE_SERVER_NAME/g' /etc/hosts && \\
+cat > /tmp/integers << EOF
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+EOF
+
+cat > /tmp/hive-load.sh << EOF
+hadoop fs -put /tmp/integers /
+hive -e "create table test_table (test STRING);load data inpath '/integers' into table test_table;"
+EOF
+chmod a+x /tmp/hive-load.sh
+
+cat > /tmp/hive-test.sh << EOF
+hive -e "select * from test_table;select count(*) from test_table;"
+EOF
+chmod a+x /tmp/hive-test.sh
+apt-get -y install mapr-hive
 reboot
 """
 
