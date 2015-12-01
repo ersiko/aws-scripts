@@ -86,7 +86,7 @@ EOF
 
 cat > /tmp/kafka-node.json << EOF
 {
-    "classes": [ "java", "zookeeper", "kafka::broker" ],
+    "classes": [ "zookeeper", "kafka::broker" ],
     "zookeeper::id" : "1",
     "zookeeper::client_ip" : "%{::ipaddress_lo}",
     "kafka::broker::config" : { "zookeeper.connect" : "localhost:2181" }
@@ -111,9 +111,6 @@ ln -s /etc/puppet/hiera.yaml /etc/hiera.yaml && \\
 sed -ie 's/\[master\]/\[master\]\\nautosign = true/g' /etc/puppet/puppet.conf && \\
 sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
 sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
-#puppet module install ersiko-mapr4 && \\
-git clone https://github.com/ersiko/mapr4-puppet-module.git && \\
-mv mapr4-puppet-module /etc/puppet/modules/mapr4 && \\
 puppet module install ersiko-facts && \\
 puppet module install puppetlabs-java && \\
 puppet module install puppet-kafka && \\
@@ -131,7 +128,7 @@ KAFKA_NAME            = "kafka-node"
 KAFKA_USER_DATA       = """#!/bin/bash
 wget https://apt.puppetlabs.com/puppetlabs-release-trusty.deb -O /tmp/puppetlabs-release-trusty.deb 
 dpkg -i /tmp/puppetlabs-release-trusty.deb
-sed -ie 's/^exit 0/apt-get update\\nexit 0/g' /etc/rc.local
+sed -ie 's/^exit 0/apt-get update\\ndd if=\/dev\/zero of=\/swapfile bs=1024 count=524288\\nchown root.root \/swapfile \\nchmod 0600 \/swapfile \\nmkswap \/swapfile \\nswapon \/swapfile\\nexit 0/g' /etc/rc.local
 /etc/rc.local
 echo PUT_HERE_THE_SERVER_NAME  > /etc/hostname
 echo PUT_HERE_THE_PUPPET_MASTER_IP PUT_HERE_THE_PUPPET_MASTER_NAME >> /etc/hosts
@@ -144,14 +141,8 @@ sed -ie 's/START=no/START=yes/g' /etc/default/puppet && \\
 sed -ie 's/^templatedir=/#templatedir/g' /etc/puppet/puppet.conf && \\
 sed -ie 's/^127.0.0.1 localhost/127.0.0.1 localhost PUT_HERE_THE_SERVER_NAME/g' /etc/hosts && \\
 
-chmod a+x /tmp/hive-test.sh
-apt-get -y install mapr-hive
 #Add swap
-dd if=/dev/zero of=/swapfile1 bs=1024 count=524288  && \\
-chown root.root /swapfile1 && \\
-chmod 0600 /swapfile1 && \\
-mkswap /swapfile1 && \\
-echo "/swapfile1 none swap sw 0 0" > fstab && \\
+echo "/swapfile1 none swap sw 0 0" >> fstab && \\
 reboot
 """
 
