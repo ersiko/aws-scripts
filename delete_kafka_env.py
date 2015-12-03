@@ -1,12 +1,13 @@
 #!/usr/bin/python3.4
 
-from boto import vpc
+from boto import vpc, iam
 import time
 
 REGION          = 'ap-southeast-1'
 PROJECT         = 'Kafka1'
 
 vpc_con = vpc.connect_to_region(REGION)
+iam_con = iam.connect_to_region(REGION)
 
 print("Terminating all instances and their elastic ips")
 instances = vpc_con.get_only_instances(filters=({"tag:Project": PROJECT, "instance-state-name": [ "pending", "running", "stopping", "stopped", "shutting-down" ]}))
@@ -28,6 +29,16 @@ volumes = vpc_con.get_all_volumes(filters=({"tag:Project": PROJECT}))
 for volume in volumes:
     print(volume)
     vpc_con.delete_volume(volume.id)
+
+#need some work prettifying this
+print("Deleting policy " + PROJECT)
+iam_con.delete_role_policy('describe_instances', PROJECT)
+print("Removing roles from instance profiles")
+iam_con.remove_role_from_instance_profile(PROJECT, 'describe_instances')
+print("Deleting role")
+iam_con.delete_role('describe_instances')
+print("Deleting instance_profile")
+iam_con.delete_instance_profile(PROJECT)
 
 print("Deleting all subnets")
 subnets = vpc_con.get_all_subnets(filters=({"tag:Project": PROJECT}))
@@ -61,9 +72,13 @@ internet_gateways = vpc_con.get_all_internet_gateways(filters=({"tag:Project": P
 
 for my_vpc in my_vpcs:
     for internet_gateway in internet_gateways:
-	    print(internet_gateway)
-	    vpc_con.detach_internet_gateway(internet_gateway.id,my_vpc.id)
-	    vpc_con.delete_internet_gateway(internet_gateway.id)
+        print(internet_gateway)
+        try: 
+            print("Detaching internet gateway")
+            vpc_con.detach_internet_gateway(internet_gateway.id,my_vpc.id)
+        except Exception:
+            print("Internet Gateway not attached. Deleting it.")
+        vpc_con.delete_internet_gateway(internet_gateway.id)
     print(my_vpc)
     my_vpc.delete()
 
